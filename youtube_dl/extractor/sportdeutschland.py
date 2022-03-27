@@ -8,6 +8,7 @@ from ..compat import (
 )
 from ..utils import (
     clean_html,
+    determine_ext,
     float_or_none,
     int_or_none,
     parse_iso8601,
@@ -47,6 +48,36 @@ class SportDeutschlandIE(InfoExtractor):
 
     def _real_extract(self, url):
         display_id = self._match_id(url)
+        data = self._download_json(
+            'https://api.sportdeutschland.tv/api/stateless/frontend/assets/%s' % display_id,
+            display_id, fatal=False) or {}
+        if data:
+            title = data['name'].strip()
+            asset_id = data['id']
+            video_url = data['video_url']
+            ext = determine_ext(video_url)
+            import pdb; pdb.set_trace()
+            if ext == 'smil':
+                formats = self._extract_smil_formats(video_url, asset_id)
+            else:
+                formats = [{'url': video_url, }]
+            self._sort_formats(formats)
+            info = {
+                'id': asset_id,
+                'display_id': display_id,
+                'title': title,
+                'description': data.get('description'),
+                'formats': formats,
+                'thumbnail': data.get('image_url'),
+            }
+            timestamp = parse_iso8601(data.get('content_start_date'))
+            if timestamp is not None:
+                duration = parse_iso8601(data.get('content_end_date'))
+                if duration is not None:
+                    info['duration'] = duration - timestamp
+                info['timestamp'] = timestamp
+            return info
+
         data = self._download_json(
             'https://backend.sportdeutschland.tv/api/permalinks/' + display_id,
             display_id, query={'access_token': 'true'})
